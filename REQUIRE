@@ -1,0 +1,4 @@
+julia 0.7
+MathOptInterface 0.8.1 0.9
+JuMP v0.18.5+ [`~/.julia/dev/JuMP`]
+LinearAlgebra
