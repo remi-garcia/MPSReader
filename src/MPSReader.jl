@@ -20,7 +20,7 @@ function mpstomodel(filename::String, solverSelected)
 
     myModel = Model(with_optimizer(solverSelected))
     @variable(myModel, x[1:nVar])
-    @objective(mod, Min, dot(c, x))
+    @objective(myModel, Min, dot(c, x))
 
     # Get type to model and bounds/fixed
     for i in varBin
@@ -56,9 +56,9 @@ function mpstomodel(filename::String, solverSelected)
     end
 
     # Add constraints
-    m = size(bgeq)
+    m = length(bgeq)
     @constraint(myModel, [i = 1:m], dot(Ageq[i,:], x) >= bgeq[i])
-    m = size(beq)
+    m = length(beq)
     @constraint(myModel, [i = 1:m], dot(Aeq[i,:], x) == beq[i])
 
     return myModel, x
@@ -77,6 +77,7 @@ function mpstomatrices(filename::String)
     varFloat = Vector{Int64}()
 
     nVar = length(varTypes)
+    nCon = length(conTypes)
 
     for i in 1:nVar
         isFloat = varTypes[i]
@@ -102,15 +103,15 @@ function mpstomatrices(filename::String)
     Ageq = Matrix{Float64}(undef, 0, nVar)
     bgeq = Vector{Float64}()
 
-    for i in 1:nVar
+    for i in 1:nCon
         if conTypes[i] == 2
-            Aeq = vcat(Aeq, A[i,:])
+            Aeq = vcat(Aeq, A[i,:]')
             push!(beq, b[i])
         elseif conTypes[i] == 1
-            Ageq = vcat(Ageq, -A[i,:])
+            Ageq = vcat(Ageq, -A[i,:]')
             push!(bgeq, -b[i])
         elseif conTypes[i] == 3
-            Ageq = vcat(Ageq, A[i,:])
+            Ageq = vcat(Ageq, A[i,:]')
             push!(bgeq, b[i])
         else
             error("Should never happen")
@@ -144,7 +145,7 @@ function readmps(filename::String)
     objsense = :min
     nVar = 0
     nCon = 0
-    A = 0 #Matrix{Float64}(undef)
+    A = Matrix{Float64}(undef,0,0)
     b = Vector{Float64}()
     c = Vector{Float64}()
     c0 = 0.0
@@ -185,9 +186,9 @@ function readmps(filename::String)
             objectiveName, conNames, conTypes = readRows(mps)
             nCon = length(conTypes)
         elseif section == "COLUMNS"
-            varNames, c, A = readColumns(mps, objectiveName, conNames)
+            varNames, c, A, varTypes = readColumns(mps, objectiveName, conNames)
             nVar = length(keys(varNames))
-            bounds = fill((0.0, Inf), nVar))
+            bounds = fill((0.0, Inf), nVar)
         elseif section == "RHS"
             b, c0 = readRhs(mps, objectiveName, conNames)
         elseif section == "RANGES"
@@ -198,7 +199,7 @@ function readmps(filename::String)
         end
         sections[section] = true
     end
-    if sections["ENDATA"]
+    if !sections["ENDATA"]
         error("No ENDATA section in the file")
     end
     close(mps)
@@ -229,8 +230,6 @@ function readBounds(mps, varNames, varTypesinit)
         boundType = words[1]
         name = words[3]
 
-        boundsTypes = ["FR", "MI", "PL", "BV", "LO", "UP", "FX", "LI", "UI", "SC"]
-
         if boundType == "FR"
             # Free variable
             bounds[varNames[name]] = (-Inf, Inf)
@@ -243,6 +242,7 @@ function readBounds(mps, varNames, varTypesinit)
             end
         elseif boundType == "PL"
             # Default value
+            bounds[varNames[name]] = (bounds[varNames[name]][1], Inf)
         elseif boundType == "BV"
             # Binary variable
             bounds[varNames[name]] = (0.0, 1.0)
@@ -396,11 +396,11 @@ function readColumns(mps, objectiveName, conNames)
     varNames = Dict{String, Int}()
     varTypes = BitArray{1}() # true : float   false : int
     nCon = length(keys(conNames))
-    A = zeros(Float64, nCon, 1)
+    A = zeros(Float64, nCon, 0)
     initVar = zeros(Float64, nCon, 1)
     c = Vector{Float64}()
     nVar = 1
-    isFloat = false
+    isFloat = true
 
     line = readline(mps)
     while strip(line) == "" || line[1] == '*'
@@ -421,7 +421,7 @@ function readColumns(mps, objectiveName, conNames)
         # MARKER for INT
         if words[3] == "'MARKER'"
             if words[5] == "'INTORG'"
-                varTypes = .!varTypes
+                isFloat = false
             elseif words[5] == "'INTEND'"
                 isFloat = true
             else
@@ -446,7 +446,7 @@ function readColumns(mps, objectiveName, conNames)
             end
 
             if words[5] != ""
-                if words[3] == objectiveName
+                if words[5] == objectiveName
                     # Case add to objective
                     c[varNames[name]] = parse(Float64, words[6])
                 else
@@ -464,7 +464,7 @@ function readColumns(mps, objectiveName, conNames)
     end
 
     seek(mps, pos)
-    return varNames, c, A
+    return varNames, c, A, varTypes
 end
 
 
