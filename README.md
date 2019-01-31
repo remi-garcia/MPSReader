@@ -21,6 +21,7 @@ julia 1.0.0</br>
 MathOptInterface v0.8.1</br>
 JuMP v0.18.5+ [`~/.julia/dev/JuMP`]</br>
 LinearAlgebra</br>
+GLPK (only to run examples</br>
 
 This package is using the development version of JuMP, it will be JuMP v0.19.0. If you are using julia 1.0.0 or newer you can install the needed package as follow:
 ```julia
@@ -28,6 +29,7 @@ julia> using Pkg
 julia> Pkg.add("MathOptInterface")
 julia> Pkg.add("LinearAlgebra")
 julia> Pkg.develop("JuMP")
+julia> Pkg.add("GLPK") #That's optional
 ```
 
 ### Installing
