@@ -14,14 +14,17 @@ using LinearAlgebra
 #using CPLEX
 
 function mpstomodel(filename::String, solverSelected)
-    varBin, varInt, varFloat, bounds, c, Aeq, beq, Ageq, bgeq = mpstomatrices(filename)
+    varBin, varInt, varFloat, bounds, c, c0, Aeq, beq, Ageq, bgeq = mpstomatrices(filename)
 
     nVar = length(varBin) + length(varInt) + length(varFloat)
 
     myModel = Model(with_optimizer(solverSelected))
     @variable(myModel, x[1:nVar])
-    @objective(myModel, Min, dot(c, x))
-
+    if !isapprox(c0, 0)
+        @objective(myModel, Min, dot(c, x) + c0)
+    else
+        @objective(myModel, Min, dot(c, x))
+    end
     # Get type to model and bounds/fixed
     for i in varBin
         JuMP.set_binary(x[i])
@@ -67,9 +70,6 @@ end
 
 function mpstomatrices(filename::String)
     varTypes, bounds, objsense, c, c0, A, b, conTypes = readmps(filename)
-    if !isapprox(c0, 0)
-        @warn "Drop constant in objective function"
-    end
 
     # Get precise var type
     varBin = Vector{Int64}()
@@ -95,6 +95,7 @@ function mpstomatrices(filename::String)
     # cost to min
     if objsense == :max
         c = -c
+        c0 = -c0
     end
 
     # Split A and b in equality and inequality
@@ -118,7 +119,7 @@ function mpstomatrices(filename::String)
         end
     end
 
-    return varBin, varInt, varFloat, bounds, c, Aeq, beq, Ageq, bgeq
+    return varBin, varInt, varFloat, bounds, c, c0, Aeq, beq, Ageq, bgeq
 end
 
 
@@ -235,10 +236,10 @@ function readBounds(mps, varNames, varTypesinit)
             bounds[varNames[name]] = (-Inf, Inf)
         elseif boundType == "MI"
             # Lower bound -inf
-            if bounds[varNames[name]][2] == Inf
-                bounds[varNames[name]] = (-Inf, 0.0)
-            else
+            if isfinite(bounds[varNames[name]][2])
                 bounds[varNames[name]] = (-Inf, bounds[varNames[name]][2])
+            else
+                bounds[varNames[name]] = (-Inf, 0.0)
             end
         elseif boundType == "PL"
             # Default value
