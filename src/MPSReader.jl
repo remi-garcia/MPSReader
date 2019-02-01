@@ -13,8 +13,8 @@ using LinearAlgebra
 #using Gurobi
 #using CPLEX
 
-function mpstomodel(filename::String, solverSelected)
-    varBin, varInt, varFloat, bounds, c, c0, Aeq, beq, Ageq, bgeq = mpstomatrices(filename)
+function mpstomodel(filename::String, solverSelected::DataType, fixed::Bool = true)
+    varBin, varInt, varFloat, bounds, c, c0, Aeq, beq, Ageq, bgeq = mpstomatrices(filename, fixed)
 
     nVar = length(varBin) + length(varInt) + length(varFloat)
 
@@ -68,8 +68,8 @@ function mpstomodel(filename::String, solverSelected)
 end
 
 
-function mpstomatrices(filename::String)
-    varTypes, bounds, objsense, c, c0, A, b, conTypes = readmps(filename)
+function mpstomatrices(filename::String, fixed::Bool = true)
+    varTypes, bounds, objsense, c, c0, A, b, conTypes = readmps(filename, fixed)
 
     # Get precise var type
     varBin = Vector{Int64}()
@@ -123,17 +123,21 @@ function mpstomatrices(filename::String)
 end
 
 
-function readmps(filename::String)
+function readmps(filename::String, fixed::Bool = true)
     sections = Dict{String, Bool}([
         "NAME" => false,
-        "OBJSENSE" => false,
         "ROWS" => false,
         "COLUMNS" => false,
         "RHS" => false,
         "BOUNDS" => false,
         "RANGES" => false,
+        "SOS" => false,
         "ENDATA" => false
     ])
+    if !fixed
+        sections["OBJSENSE"] = false
+        sections["OBJNAME"] = false
+    end
 
     varNames = Dict{String, Int}()
     conNames = Dict{String, Int}()
@@ -160,7 +164,7 @@ function readmps(filename::String)
         while strip(line) == "" || line[1] == '*'
             line = readline(mps)
         end
-        words = strip.(split(line))
+        words = split(line)
         section = words[1]
 
         # Errors in sections names and order
@@ -183,20 +187,24 @@ function readmps(filename::String)
             name = words[2]
         elseif section == "OBJSENSE"
             objsense = readObjsense(mps)
+        elseif section == "OBJNAME"
+            objectiveName = readObjname(mps)
         elseif section == "ROWS"
-            objectiveName, conNames, conTypes = readRows(mps)
+            objectiveName, conNames, conTypes = readRows(mps, objectiveName, fixed)
             nCon = length(conTypes)
         elseif section == "COLUMNS"
-            varNames, c, A, varTypes = readColumns(mps, objectiveName, conNames)
+            varNames, c, A, varTypes = readColumns(mps, objectiveName, conNames, fixed)
             nVar = length(keys(varNames))
             bounds = fill((0.0, Inf), nVar)
         elseif section == "RHS"
-            b, c0 = readRhs(mps, objectiveName, conNames)
+            b, c0 = readRhs(mps, objectiveName, conNames, fixed)
         elseif section == "RANGES"
-            A, b, conTypes = readRanges(mps, A, b, conNames, conTypes)
+            A, b, conTypes = readRanges(mps, A, b, conNames, conTypes, fixed)
             nCon = length(conTypes)
         elseif section == "BOUNDS"
-            bounds, varTypes = readBounds(mps, varNames, varTypes)
+            bounds, varTypes = readBounds(mps, varNames, varTypes, fixed)
+        elseif section == "SOS"
+            error("SOS section reader not ready yet")
         end
         sections[section] = true
     end
@@ -209,7 +217,7 @@ function readmps(filename::String)
 end
 
 
-function readBounds(mps, varNames, varTypesinit)
+function readBounds(mps, varNames, varTypesinit, fixed)
     varTypes = copy(varTypesinit)
     pos = position(mps)
     bounds = fill((0.0, Inf), length(keys(varNames)))
@@ -220,15 +228,24 @@ function readBounds(mps, varNames, varTypesinit)
     end
     while line[1] == ' '
         pos = position(mps)
-        lenLine = length(line)
-        words = strip.([
-            line[2:min(lenLine, 3)],
-            line[5:min(lenLine, 12)],
-            line[15:min(lenLine, 22)],
-            line[25:min(lenLine, 36)]
-        ])
+        words = Vector{String}()
+
+        if fixed
+            lenLine = length(line)
+            words = strip.([
+                line[2:min(lenLine, 3)],
+                line[5:min(lenLine, 12)],
+                line[15:min(lenLine, 22)],
+                line[25:min(lenLine, 36)]
+            ])
+        else
+            words = split(line)
+        end
 
         boundType = words[1]
+        if !fixed
+            boundType = uppercase(boundType)
+        end
         name = words[3]
 
         if boundType == "FR"
@@ -289,7 +306,7 @@ function readBounds(mps, varNames, varTypesinit)
 end
 
 
-function readRanges(mps, Ainit, binit, conNames, conTypesinit)
+function readRanges(mps, Ainit, binit, conNames, conTypesinit, fixed)
     A = copy(Ainit)
     b = copy(binit)
     conTypes = copy(conTypesinit)
@@ -301,17 +318,26 @@ function readRanges(mps, Ainit, binit, conNames, conTypesinit)
     end
     while line[1] == ' '
         pos = position(mps)
-        lenLine = length(line)
-        words = strip.([
-            line[2:min(lenLine, 3)],
-            line[5:min(lenLine, 12)],
-            line[15:min(lenLine, 22)],
-            line[25:min(lenLine, 36)],
-            line[40:min(lenLine, 47)],
-            line[50:min(lenLine, 61)]
-        ])
+        words = Vector{String}()
 
-        for i in [3,5]
+        if fixed
+            lenLine = length(line)
+            words = strip.([
+                line[5:min(lenLine, 12)],
+                line[15:min(lenLine, 22)],
+                line[25:min(lenLine, 36)],
+                line[40:min(lenLine, 47)],
+                line[50:min(lenLine, 61)]
+            ])
+            while words[end] == ""
+                pop!(words)
+            end
+        else
+            words = split(line)
+        end
+        lenWords = length(words)
+
+        for i in 2:2:lenWords
             name = words[i]
             if name != ""
                 if conTypes[conNames[name]] == 2
@@ -342,7 +368,7 @@ function readRanges(mps, Ainit, binit, conNames, conTypesinit)
 end
 
 
-function readRhs(mps, objectiveName, conNames)
+function readRhs(mps, objectiveName, conNames, fixed)
     pos = position(mps)
     b = zeros(Float64, length(keys(conNames)))
     c0 = 0.0
@@ -353,17 +379,26 @@ function readRhs(mps, objectiveName, conNames)
     end
     while line[1] == ' '
         pos = position(mps)
-        lenLine = length(line)
-        words = strip.([
-            line[2:min(lenLine, 3)],
-            line[5:min(lenLine, 12)],
-            line[15:min(lenLine, 22)],
-            line[25:min(lenLine, 36)],
-            line[40:min(lenLine, 47)],
-            line[50:min(lenLine, 61)]
-        ])
+        words = Vector{String}()
 
-        for i in [3,5]
+        if fixed
+            lenLine = length(line)
+            words = strip.([
+                line[5:min(lenLine, 12)],
+                line[15:min(lenLine, 22)],
+                line[25:min(lenLine, 36)],
+                line[40:min(lenLine, 47)],
+                line[50:min(lenLine, 61)]
+            ])
+            while words[end] == ""
+                pop!(words)
+            end
+        else
+            words = split(line)
+        end
+        lenWords = length(words)
+
+        for i in 2:2:lenWords
             name = words[i]
             if name == objectiveName
                 if c0 != 0
@@ -392,7 +427,7 @@ function readRhs(mps, objectiveName, conNames)
 end
 
 
-function readColumns(mps, objectiveName, conNames)
+function readColumns(mps, objectiveName, conNames, fixed)
     pos = position(mps)
     varNames = Dict{String, Int}()
     varTypes = BitArray{1}() # true : float   false : int
@@ -409,27 +444,40 @@ function readColumns(mps, objectiveName, conNames)
     end
     while line[1] == ' '
         pos = position(mps)
-        lenLine = length(line)
-        words = strip.([
-            line[2:min(lenLine, 3)],
-            line[5:min(lenLine, 12)],
-            line[15:min(lenLine, 22)],
-            line[25:min(lenLine, 36)],
-            line[40:min(lenLine, 47)],
-            line[50:min(lenLine, 61)]
-        ])
+        words = Vector{String}()
+
+        if fixed
+            lenLine = length(line)
+            words = strip.([
+                line[5:min(lenLine, 12)],
+                line[15:min(lenLine, 22)],
+                line[25:min(lenLine, 36)],
+                line[40:min(lenLine, 47)],
+                line[50:min(lenLine, 61)]
+            ])
+            while words[end] == ""
+                pop!(words)
+            end
+        else
+            words = split(line)
+        end
+        lenWords = length(words)
 
         # MARKER for INT
-        if words[3] == "'MARKER'"
-            if words[5] == "'INTORG'"
+        if words[2] == "'MARKER'"
+            ind = 3
+            if fixed
+                ind = 4
+            end
+            if words[ind] == "'INTORG'"
                 isFloat = false
-            elseif words[5] == "'INTEND'"
+            elseif words[ind] == "'INTEND'"
                 isFloat = true
             else
                 error("Unknown MARKER in MPS file")
             end
         else
-            name = words[2]
+            name = words[1]
             if !haskey(varNames, name)
                 varNames[name] = nVar
                 nVar += 1
@@ -438,21 +486,13 @@ function readColumns(mps, objectiveName, conNames)
                 push!(c, 0.0)
             end
 
-            if words[3] == objectiveName
-                # Case add to objective
-                c[varNames[name]] = parse(Float64, words[4])
-            else
-                # Case add to A
-                A[conNames[words[3]], varNames[name]] = parse(Float64, words[4])
-            end
-
-            if words[5] != ""
-                if words[5] == objectiveName
+            for i in 2:2:lenWords
+                if words[i] == objectiveName
                     # Case add to objective
-                    c[varNames[name]] = parse(Float64, words[6])
+                    c[varNames[name]] = parse(Float64, words[i+1])
                 else
                     # Case add to A
-                    A[conNames[words[5]], varNames[name]] = parse(Float64, words[6])
+                    A[conNames[words[i]], varNames[name]] = parse(Float64, words[i+1])
                 end
             end
         end
@@ -469,8 +509,7 @@ function readColumns(mps, objectiveName, conNames)
 end
 
 
-function readRows(mps)
-    objectiveName = ""
+function readRows(mps, objectiveName::String, fixed::Bool)
     pos = position(mps)
     objective = false
     conNames = Dict{String, Int}()
@@ -482,10 +521,14 @@ function readRows(mps)
         line = readline(mps)
     end
     while line[1] == ' '
-        l = min(length(line), 12)
         pos = position(mps)
-        typeTmp = strip(line[2:3])
-        name = strip(line[5:l])
+        if fixed
+            typeTmp = strip(line[2:3])
+            name = strip(line[5:min(length(line), 12)])
+        else
+            typeTmp, name = split(line)
+            typeTmp = uppercase(typeTmp)
+        end
         if typeTmp == "N"
             if objective
                 error("MultiObjectives")
@@ -519,6 +562,17 @@ function readRows(mps)
 end
 
 
+function readObjname(mps)
+    line = readline(mps)
+    while strip(line) == "" || line[1] == '*'
+        line = readline(mps)
+    end
+
+    seek(mps, position(mps))
+    return strip(line)
+end
+
+
 function readObjsense(mps)
     objectiveSense = ["MIN", "MAX"]
 
@@ -527,12 +581,12 @@ function readObjsense(mps)
         line = readline(mps)
     end
 
-    if !(line[2:4] in objectiveSense)
+    if !(strip(line) in objectiveSense)
         error("No valid information in OBJSENSE section")
     end
 
     seek(mps, position(mps))
-    return line[2:4] == "MIN" ? :min : :max
+    return strip(line) == "MIN" ? :min : :max
 end
 
 #end # module

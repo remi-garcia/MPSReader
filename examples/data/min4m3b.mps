@@ -1,6 +1,4 @@
 NAME          min4m3
-OBJSENSE
- MIN
 ROWS
  N  OBJ
  L  A1
