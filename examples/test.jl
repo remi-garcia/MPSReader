@@ -1,4 +1,4 @@
-using GLPK
+#using GLPK
 
 include("../src/MPSReader.jl")
 
@@ -15,9 +15,9 @@ files = Dict{String, Bool}([
 ])
 for file in keys(files)
     println("--- "*file*" ---")
-    myModel, myVariables = mpstomodel("data/"*file, GLPK.Optimizer, files[file])
+    myModel, myVariables = mpstomodel("data/"*file, files[file])
     @info myModel
-    #JuMP.optimize!(myModel)
+    #JuMP.optimize!(myModel, with_optimizer(GLPK.Optimizer))
     #println(JuMP.termination_status(myModel))
     #println(JuMP.objective_value(myModel))
     println()

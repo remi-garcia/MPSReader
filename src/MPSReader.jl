@@ -6,19 +6,12 @@ using LinearAlgebra
 
 #export readmps, mpstomodel
 
-#using JuMP
-#using MathOptInterface
-#using LinearAlgebra
-#using GLPK
-#using Gurobi
-#using CPLEX
-
-function mpstomodel(filename::String, solverSelected::DataType, fixed::Bool = true)
+function mpstomodel(filename::String, fixed::Bool = true)
     varBin, varInt, varFloat, bounds, c, c0, Aeq, beq, Ageq, bgeq = mpstomatrices(filename, fixed)
 
     nVar = length(varBin) + length(varInt) + length(varFloat)
 
-    myModel = Model(with_optimizer(solverSelected))
+    myModel = Model()
     @variable(myModel, x[1:nVar])
     if !isapprox(c0, 0)
         @objective(myModel, Min, dot(c, x) + c0)
