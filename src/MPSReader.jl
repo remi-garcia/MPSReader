@@ -7,16 +7,24 @@ using LinearAlgebra
 #export readmps, mpstomodel
 
 function mpstomodel(filename::String, fixed::Bool = true)
-    varBin, varInt, varFloat, bounds, c, c0, Aeq, beq, Ageq, bgeq = mpstomatrices(filename, fixed)
+    varBin, varInt, varFloat, bounds, objsense, c, c0, Aeq, beq, Aineq, bineq = mpstomatrices(filename, fixed)
 
     nVar = length(varBin) + length(varInt) + length(varFloat)
 
     myModel = Model()
     @variable(myModel, x[1:nVar])
     if !isapprox(c0, 0)
-        @objective(myModel, Min, dot(c, x) + c0)
+        if objsense == :min
+            @objective(myModel, Min, dot(c, x) + c0)
+        else
+            @objective(myModel, Max, dot(c, x) + c0)
+        end
     else
-        @objective(myModel, Min, dot(c, x))
+        if objsense == :min
+            @objective(myModel, Min, dot(c, x))
+        else
+            @objective(myModel, Max, dot(c, x))
+        end
     end
     # Get type to model and bounds/fixed
     for i in varBin
@@ -52,8 +60,12 @@ function mpstomodel(filename::String, fixed::Bool = true)
     end
 
     # Add constraints
-    m = length(bgeq)
-    @constraint(myModel, [i = 1:m], dot(Ageq[i,:], x) >= bgeq[i])
+    m = length(bineq)
+    if objsense == :min
+        @constraint(myModel, [i = 1:m], dot(Aineq[i,:], x) >= bineq[i])
+    else
+        @constraint(myModel, [i = 1:m], dot(Aineq[i,:], x) <= bineq[i])
+    end
     m = length(beq)
     @constraint(myModel, [i = 1:m], dot(Aeq[i,:], x) == beq[i])
 
@@ -85,34 +97,35 @@ function mpstomatrices(filename::String, fixed::Bool = true)
         end
     end
 
-    # cost to min
+    # Aineq x >= bineq in min
+    ismin = 1
+    # Aineq x <= bineq in max
     if objsense == :max
-        c = -c
-        c0 = -c0
+        ismin = -1
     end
 
     # Split A and b in equality and inequality
     Aeq = Matrix{Float64}(undef, 0, nVar)
     beq = Vector{Float64}()
-    Ageq = Matrix{Float64}(undef, 0, nVar)
-    bgeq = Vector{Float64}()
+    Aineq = Matrix{Float64}(undef, 0, nVar)
+    bineq = Vector{Float64}()
 
     for i in 1:nCon
         if conTypes[i] == 2
             Aeq = vcat(Aeq, A[i,:]')
             push!(beq, b[i])
         elseif conTypes[i] == 1
-            Ageq = vcat(Ageq, -A[i,:]')
-            push!(bgeq, -b[i])
+            Aineq = vcat(Aineq, -ismin * A[i,:]')
+            push!(bineq, -ismin * b[i])
         elseif conTypes[i] == 3
-            Ageq = vcat(Ageq, A[i,:]')
-            push!(bgeq, b[i])
+            Aineq = vcat(Aineq, ismin * A[i,:]')
+            push!(bineq, ismin * b[i])
         else
             error("Should never happen")
         end
     end
 
-    return varBin, varInt, varFloat, bounds, c, c0, Aeq, beq, Ageq, bgeq
+    return varBin, varInt, varFloat, bounds, objsense, c, c0, Aeq, beq, Aineq, bineq
 end
 
 
