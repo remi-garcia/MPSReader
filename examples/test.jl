@@ -1,4 +1,5 @@
-#using GLPK
+using GLPK
+solver = GLPK.Optimizer
 
 include("../src/MPSReader.jl")
 
@@ -17,9 +18,10 @@ for file in keys(files)
     println("--- "*file*" ---")
     myModel, myVariables = mpstomodel("data/"*file, files[file])
     @info myModel
-    #JuMP.optimize!(myModel, with_optimizer(GLPK.Optimizer))
-    #println(JuMP.termination_status(myModel))
-    #println(JuMP.objective_value(myModel))
+    JuMP.set_optimizer(myModel, with_optimizer(solver))
+    JuMP.optimize!(myModel)
+    println(JuMP.termination_status(myModel))
+    println(JuMP.objective_value(myModel))
     println()
 end
 
