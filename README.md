@@ -21,9 +21,9 @@ julia 1.0.0</br>
 MathOptInterface v0.8.1</br>
 JuMP v0.18.5+ [`~/.julia/dev/JuMP`]</br>
 LinearAlgebra</br>
-GLPK (only to run examples</br>
+GLPK (only to run examples)</br>
 
-This package is using the development version of JuMP, it will be JuMP v0.19.0. If you are using julia 1.0.0 or newer you can install the needed package as follow:
+This package is using the development version of JuMP, it will be JuMP v0.19.0. If you are using julia 1.0.0 or newer you can install all the needed package as follow:
 ```julia
 julia> using Pkg
 julia> Pkg.add("MathOptInterface")
@@ -50,10 +50,15 @@ julia> myModel, myVariables = mpstomodel("mympsfile.mps", mySolver, fixed) # myS
 
 `varTypes` is a vector of booleans, elements are true if the variable is continuous and at false if it is an integer or a boolean. `bounds` is a vector of pairs, the first is the lower bound of the variable and the second the upper bound. `objsense` is a Symbol for the optimizing sense, (`:min` by default). `conTypes` is a vector that gives the type of the constraint, 1 for ≤, 2 for = and 3 for ≥. Each constraint having a lower and an upper bound is duplicated into a constraint with a lower bound and another with an upper bound.
 
-`myModel` is the model in minimization with constraints of type ≥ and =. Therefore it should have this form:</br>
+`myModel` is the model in minimization (maximization) with constraints of type ≥ (≤) and =. Therefore it should have this form:</br>
 minimize cᵀ x + c₀</br>
 subject to Ax ≥ b</br>
-           Aeq x ≥ beq</br>
+           Aeq x = beq</br>
+l ≤ x ≤ u</br>
+or</br>
+maximize cᵀ x + c₀</br>
+subject to Ax ≤ b</br>
+           Aeq x = beq</br>
 l ≤ x ≤ u</br>
 
 By default fixed is true but if you are using a Free MPS Format you can set fixed variable to false. As lpsolve authors we suggest to try the fixed format and if it fails switch for the free format.
