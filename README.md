@@ -1,5 +1,7 @@
 # MPSReader
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+
 MPSReader is a Julia package that transform a .mps file (MPS format) into a model using JuMP.
 
 The MPS format represents problem of the following form :</br>
