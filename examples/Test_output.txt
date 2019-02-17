@@ -1,25 +1,3 @@
-include("../src/MPSReader.jl")
-
-fixed = true
-
-files = Dict{String, Bool}([
-    "lpsolve.mps" => fixed,
-    "min4m3.mps" => fixed,
-    "min4m3i.mps" => fixed,
-    "min4m3b.mps" => fixed,
-    "min4m3mip.mps" => fixed,
-    "min4m3c0.mps" => fixed,
-    "max4m3.mps" => !fixed
-])
-for file in keys(files)
-    println("--- "*file*" ---")
-    myModel, myVariables = mpstomodel("data/"*file, files[file])
-    @info myModel
-    println()
-end
-
-
-#= Expected output:
 --- lpsolve.mps ---
 ┌ Info: Min x[1] + 4 x[2] + 9 x[3]
 │ Subject to
@@ -104,4 +82,3 @@ end
 │  x[1] - x[2] + x[3] + 2 x[4] = -8.0
 │  -x[1] - 2 x[2] - x[3] - x[4] ≥ 5.0
 └  x[1] + x[2] + x[3] - x[4] ≥ 2.0
-=#
