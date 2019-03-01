@@ -162,62 +162,62 @@ function readmps(filename::String, fixed::Bool = true)
     c0 = 0.0
     bounds = Vector{Tuple{Float64, Float64}}()
 
-    mps = open(filename, "r")
-    line = ""
-    while !eof(mps) && !sections["ENDATA"]
-        line = readline(mps)
-        # Read the section name and avoid empty lines and comments
-        while strip(line) == "" || line[1] == '*'
+    open(filename) do mps
+        line = ""
+        while !eof(mps) && !sections["ENDATA"]
             line = readline(mps)
-        end
-        words = split(line)
-        section = words[1]
+            # Read the section name and avoid empty lines and comments
+            while strip(line) == "" || line[1] == '*'
+                line = readline(mps)
+            end
+            words = split(line)
+            section = words[1]
 
-        # Errors in sections names and order
-        if !haskey(sections, section)
-            error("Section ", section, " is not a valide section")
-        elseif sections[section]
-            error("Section ", section, " appears twice")
-        elseif section == "COLUMNS" && !sections["ROWS"]
-            error("ROWS must come before COLUMNS")
-        elseif section == "RHS" && (!sections["COLUMNS"] || !sections["NAME"])
-            error("NAME and COLUMNS must come before RHS")
-        elseif section == "BOUNDS" && !sections["COLUMNS"]
-            error("COLUMNS must come before BOUNDS")
-        elseif section == "RANGES" && !sections["RHS"]
-            error("RHS must come before RANGES")
-        end
+            # Errors in sections names and order
+            if !haskey(sections, section)
+                error("Section ", section, " is not a valide section")
+            elseif sections[section]
+                error("Section ", section, " appears twice")
+            elseif section == "COLUMNS" && !sections["ROWS"]
+                error("ROWS must come before COLUMNS")
+            elseif section == "RHS" && (!sections["COLUMNS"] || !sections["NAME"])
+                error("NAME and COLUMNS must come before RHS")
+            elseif section == "BOUNDS" && !sections["COLUMNS"]
+                error("COLUMNS must come before BOUNDS")
+            elseif section == "RANGES" && !sections["RHS"]
+                error("RHS must come before RANGES")
+            end
 
-        # Read info
-        if section == "NAME"
-            name = words[2]
-        elseif section == "OBJSENSE"
-            objsense = readObjsense(mps)
-        elseif section == "OBJNAME"
-            objectiveName = readObjname(mps)
-        elseif section == "ROWS"
-            objectiveName, conNames, conTypes = readRows(mps, objectiveName, fixed)
-            nCon = length(conTypes)
-        elseif section == "COLUMNS"
-            varNames, c, A, varTypes = readColumns(mps, objectiveName, conNames, fixed)
-            nVar = length(keys(varNames))
-            bounds = fill((0.0, Inf), nVar)
-        elseif section == "RHS"
-            b, c0 = readRhs(mps, objectiveName, conNames, fixed)
-        elseif section == "RANGES"
-            A, b, conTypes = readRanges(mps, A, b, conNames, conTypes, fixed)
-            nCon = length(conTypes)
-        elseif section == "BOUNDS"
-            bounds, varTypes = readBounds(mps, varNames, varTypes, fixed)
-        elseif section == "SOS"
-            error("SOS section reader not ready yet")
+            # Read info
+            if section == "NAME"
+                name = words[2]
+            elseif section == "OBJSENSE"
+                objsense = readObjsense(mps)
+            elseif section == "OBJNAME"
+                objectiveName = readObjname(mps)
+            elseif section == "ROWS"
+                objectiveName, conNames, conTypes = readRows(mps, objectiveName, fixed)
+                nCon = length(conTypes)
+            elseif section == "COLUMNS"
+                varNames, c, A, varTypes = readColumns(mps, objectiveName, conNames, fixed)
+                nVar = length(keys(varNames))
+                bounds = fill((0.0, Inf), nVar)
+            elseif section == "RHS"
+                b, c0 = readRhs(mps, objectiveName, conNames, fixed)
+            elseif section == "RANGES"
+                A, b, conTypes = readRanges(mps, A, b, conNames, conTypes, fixed)
+                nCon = length(conTypes)
+            elseif section == "BOUNDS"
+                bounds, varTypes = readBounds(mps, varNames, varTypes, fixed)
+            elseif section == "SOS"
+                error("SOS section reader not ready yet")
+            end
+            sections[section] = true
         end
-        sections[section] = true
+        if !sections["ENDATA"]
+            error("No ENDATA section in the file")
+        end
     end
-    if !sections["ENDATA"]
-        error("No ENDATA section in the file")
-    end
-    close(mps)
 
     return varTypes, bounds, objsense, c, c0, A, b, conTypes
 end
